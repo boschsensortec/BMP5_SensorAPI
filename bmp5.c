@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2021 Bosch Sensortec GmbH. All rights reserved.
+* Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
 *
 * BSD-3-Clause
 *
@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5.c
-* @date       2021-08-27
-* @version    v1.0.5
+* @date       2022-06-08
+* @version    v1.1.0
 *
 */
 
@@ -296,6 +296,8 @@ int8_t bmp5_init(struct bmp5_dev *dev)
 
     if (rslt == BMP5_OK)
     {
+        dev->chip_id = 0;
+
         if (dev->intf == BMP5_SPI_INTF)
         {
             /* Performing a single read via SPI of registers,
@@ -628,7 +630,7 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
          * precision in deg C
          */
         sensor_data->temperature =
-            (int64_t)((raw_data_t / (int64_t)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+            (int64_t)((raw_data_t / (float)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 #else
 
         /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
@@ -645,7 +647,7 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
              * precision in Pa
              */
             sensor_data->pressure =
-                (uint64_t)((raw_data_p / (int64_t)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+                (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 #else
 
             /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
@@ -1439,7 +1441,7 @@ static int8_t validate_chip_id(uint8_t chip_id, struct bmp5_dev *dev)
 {
     int8_t rslt;
 
-    if (chip_id == BMP5_CHIP_ID)
+    if ((chip_id == BMP5_CHIP_ID_PRIM) || (chip_id == BMP5_CHIP_ID_SEC))
     {
         /* Updating chip_id in device structure */
         dev->chip_id = chip_id;
@@ -1802,7 +1804,7 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
                  * precision in deg C
                  */
                 sensor_data->temperature =
-                    (int64_t)((raw_data_t / (int64_t)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+                    (int64_t)((raw_data_t / (float)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 #else
 
                 /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
@@ -1838,7 +1840,7 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
                  * precision in Pa
                  */
                 sensor_data->pressure =
-                    (uint64_t)((raw_data_p / (uint64_t)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+                    (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 #else
 
                 /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
@@ -1878,13 +1880,13 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
                  * precision in deg C
                  */
                 sensor_data->temperature =
-                    (int64_t)((raw_data_t / (int64_t)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+                    (int64_t)((raw_data_t / (float)(float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 
                 /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
                  * precision in Pa
                  */
                 sensor_data->pressure =
-                    (uint64_t)((raw_data_p / (uint64_t)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+                    (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
 #else
 
                 /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */

@@ -1,9 +1,8 @@
 /**\
- * Copyright (C) 2021 Bosch Sensortec GmbH
+ * Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
  *
- * The license is available at root folder
- *
- */
+ * SPDX-License-Identifier: BSD-3-Clause
+ **/
 
 /******************************************************************************/
 /*!                 Header Files                                              */
@@ -33,7 +32,7 @@ static int8_t set_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, st
  *
  *  @return Status of execution.
  */
-static int8_t get_sensor_data(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev);
+static int8_t get_sensor_data(const struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev);
 
 /******************************************************************************/
 /*!            Functions                                        */
@@ -42,7 +41,7 @@ int main(void)
 {
     int8_t rslt;
     struct bmp5_dev dev;
-    struct bmp5_osr_odr_press_config osr_odr_press_cfg;
+    struct bmp5_osr_odr_press_config osr_odr_press_cfg = { 0 };
 
     /* Interface reference is given as a parameter
      * For I2C : BMP5_I2C_INTF
@@ -76,7 +75,7 @@ int main(void)
 
 static int8_t set_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev)
 {
-    int8_t rslt = 0;
+    int8_t rslt;
     struct bmp5_iir_config set_iir_cfg;
     struct bmp5_oor_press_configuration set_oor_press_config;
     struct bmp5_int_source_select int_source_select;
@@ -132,11 +131,7 @@ static int8_t set_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, st
 
         if (rslt == BMP5_OK)
         {
-            rslt = bmp5_configure_interrupt(BMP5_INT_MODE_PULSED,
-                                            BMP5_INT_POL_ACTIVE_HIGH,
-                                            BMP5_INT_OD_PUSHPULL,
-                                            BMP5_INTR_ENABLE,
-                                            dev);
+            rslt = bmp5_configure_interrupt(BMP5_PULSED, BMP5_ACTIVE_HIGH, BMP5_INTR_PUSH_PULL, BMP5_INTR_ENABLE, dev);
             bmp5_error_codes_print_result("bmp5_configure_interrupt", rslt);
 
             if (rslt == BMP5_OK)
@@ -156,12 +151,15 @@ static int8_t set_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, st
     return rslt;
 }
 
-static int8_t get_sensor_data(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev)
+static int8_t get_sensor_data(const struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev)
 {
     int8_t rslt = 0;
     uint8_t idx = 0;
     uint8_t int_status;
     struct bmp5_sensor_data sensor_data;
+
+    printf("\nOutput :\n\n");
+    printf("Data, Pressure (Pa)\n");
 
     while (idx < 50)
     {
@@ -176,9 +174,9 @@ static int8_t get_sensor_data(struct bmp5_osr_odr_press_config *osr_odr_press_cf
             if (rslt == BMP5_OK)
             {
 #ifdef BMP5_USE_FIXED_POINT
-                printf("Pressure[%d]: %lu  Pa\n", idx, (long unsigned int) sensor_data.pressure);
+                printf("%d, %lu\n", idx, (long unsigned int) sensor_data.pressure);
 #else
-                printf("Pressure[%d]: %f Pa\n", idx, sensor_data.pressure);
+                printf("%d, %f\n", idx, sensor_data.pressure);
 #endif
                 idx++;
             }

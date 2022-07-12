@@ -1,9 +1,8 @@
 /**\
- * Copyright (C) 2021 Bosch Sensortec GmbH
+ * Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
  *
- * The license is available at root folder
- *
- */
+ * SPDX-License-Identifier: BSD-3-Clause
+ **/
 
 /******************************************************************************/
 /*!                 Header Files                                              */
@@ -50,7 +49,7 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev);
 
 int main(void)
 {
-    int8_t rslt = 0;
+    int8_t rslt;
     struct bmp5_dev dev;
     struct bmp5_fifo fifo;
 
@@ -86,7 +85,7 @@ int main(void)
 
 static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
-    int8_t rslt = 0;
+    int8_t rslt;
     struct bmp5_iir_config set_iir_cfg;
     struct bmp5_osr_odr_press_config osr_odr_press_cfg;
     struct bmp5_int_source_select int_source_select;
@@ -153,11 +152,7 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
         if (rslt == BMP5_OK)
         {
-            rslt = bmp5_configure_interrupt(BMP5_INT_MODE_PULSED,
-                                            BMP5_INT_POL_ACTIVE_HIGH,
-                                            BMP5_INT_OD_PUSHPULL,
-                                            BMP5_INTR_ENABLE,
-                                            dev);
+            rslt = bmp5_configure_interrupt(BMP5_PULSED, BMP5_ACTIVE_HIGH, BMP5_INTR_PUSH_PULL, BMP5_INTR_ENABLE, dev);
             bmp5_error_codes_print_result("bmp5_configure_interrupt", rslt);
 
             if (rslt == BMP5_OK)
@@ -191,6 +186,8 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
     uint8_t fifo_buffer[BMP5_FIFO_DATA_BUFFER_SIZE];
     struct bmp5_sensor_data sensor_data[BMP5_FIFO_P_T_FRAME_COUNT] = { { 0 } };
 
+    printf("\nOutput :\n");
+
     while (loop < LOOP_COUNT)
     {
         rslt = bmp5_get_interrupt_status(&int_status, dev);
@@ -219,18 +216,17 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
                 if (rslt == BMP5_OK)
                 {
+                    printf("\nData, Pressure (Pa), Temperature (deg C)\n");
+
                     for (idx = 0; idx < fifo->fifo_count; idx++)
                     {
 #ifdef BMP5_USE_FIXED_POINT
-                        printf("Fifo data [%d]    Pressure: %lu  Pa	Temperature: %ld  deg C\n",
+                        printf("%d, %lu, %ld\n",
                                idx,
                                (long unsigned int)sensor_data[idx].pressure,
                                (long int)sensor_data[idx].temperature);
 #else
-                        printf("Fifo data [%d]    Pressure: %f Pa   Temperature: %f deg C\n",
-                               idx,
-                               sensor_data[idx].pressure,
-                               sensor_data[idx].temperature);
+                        printf("%d, %f, %f\n", idx, sensor_data[idx].pressure, sensor_data[idx].temperature);
 #endif
                     }
                 }

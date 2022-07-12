@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2021 Bosch Sensortec GmbH. All rights reserved.
+* Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
 *
 * BSD-3-Clause
 *
@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5_defs.h
-* @date       2021-08-27
-* @version    v1.0.5
+* @date       2022-06-08
+* @version    v1.1.0
 *
 */
 
@@ -195,7 +195,8 @@
 #define BMP5_GET_BITS_POS_0(reg_data, bitname)    (reg_data & (bitname##_MSK))
 
 /*! @name Chip id of BMP5 */
-#define BMP5_CHIP_ID                              UINT8_C(0x50)
+#define BMP5_CHIP_ID_PRIM                         UINT8_C(0x50)
+#define BMP5_CHIP_ID_SEC                          UINT8_C(0x51)
 
 /*! @name API success code */
 #define BMP5_OK                                   INT8_C(0)

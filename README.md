@@ -2,7 +2,7 @@
 
 ### Sensor overview
 
-The BMP580 is an absolute barometric pressure sensor. 
+The BMP580/BMP585 is an absolute barometric pressure sensor. 
 Its small dimensions, its low power consumption and the highend performance allow the implementation in a wide range of 
 applications.
 
@@ -25,8 +25,6 @@ applications.
 - [Community support page](https://community.bosch-sensortec.com)
 
 ---
-#### Copyright (C) 2021 Bosch Sensortec GmbH
-
 
 
 
