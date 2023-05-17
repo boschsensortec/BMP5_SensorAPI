@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5.c
-* @date       2022-06-08
-* @version    v1.1.0
+* @date       2022-08-11
+* @version    v1.1.1
 *
 */
 
@@ -622,7 +622,7 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
 
     if (rslt == BMP5_OK)
     {
-        raw_data_t = (int32_t)((uint32_t)(reg_data[2] << 16) | (uint16_t)(reg_data[1] << 8) | reg_data[0]);
+        raw_data_t = (int32_t) ((int32_t) ((uint32_t)(((uint32_t)reg_data[2] << 16) | ((uint16_t)reg_data[1] << 8) | reg_data[0]) << 8) >> 8);
 
 #ifdef BMP5_USE_FIXED_POINT
 
@@ -1240,7 +1240,7 @@ int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor
 
         if (rslt == BMP5_OK)
         {
-            /* Get the OOR congifurations */
+            /* Get the OOR configurations */
             rslt = bmp5_get_regs(BMP5_REG_OOR_THR_P_LSB, reg_data, 4, dev);
 
             if (rslt == BMP5_OK)
@@ -1276,7 +1276,11 @@ int8_t bmp5_nvm_read(uint8_t nvm_addr, uint16_t *nvm_data, struct bmp5_dev *dev)
     /* Variable to store existing powermode */
     enum bmp5_powermode curr_pwrmode;
 
-    if (nvm_data != NULL)
+    /* Check for null pointer in the device structure */
+    rslt = null_ptr_check(dev);
+
+    /* Proceed if null check is fine */
+    if ((rslt == BMP5_OK) && (nvm_data != NULL))
     {
         rslt = nvm_write_addr(nvm_addr, BMP5_DISABLE, &curr_pwrmode, dev);
 
@@ -1337,7 +1341,11 @@ int8_t bmp5_nvm_write(uint8_t nvm_addr, const uint16_t *nvm_data, struct bmp5_de
     /* Variable to store existing powermode */
     enum bmp5_powermode curr_pwrmode;
 
-    if (nvm_data != NULL)
+    /* Check for null pointer in the device structure */
+    rslt = null_ptr_check(dev);
+
+    /* Proceed if null check is fine */
+    if ((rslt == BMP5_OK) && (nvm_data != NULL))
     {
         rslt = nvm_write_addr(nvm_addr, BMP5_ENABLE, &curr_pwrmode, dev);
 

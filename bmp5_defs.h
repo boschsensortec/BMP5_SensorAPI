@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5_defs.h
-* @date       2022-06-08
-* @version    v1.1.0
+* @date       2022-08-11
+* @version    v1.1.1
 *
 */
 
