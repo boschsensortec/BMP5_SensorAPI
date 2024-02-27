@@ -1130,7 +1130,7 @@ int8_t bmp5_get_fifo_len(uint16_t *fifo_len, struct bmp5_fifo *fifo, struct bmp5
 int8_t bmp5_get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
     int8_t rslt;
-    uint16_t fifo_len;
+    uint16_t fifo_len = 0;
 
     if (fifo != NULL)
     {
