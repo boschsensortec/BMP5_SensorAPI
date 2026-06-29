@@ -1,5 +1,5 @@
 /**\
- * Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
+ * Copyright (c) 2026 Bosch Sensortec GmbH. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  **/
@@ -7,7 +7,6 @@
 /******************************************************************************/
 /*!                 Header Files                                              */
 #include <stdio.h>
-
 #include "bmp5.h"
 #include "common.h"
 
@@ -41,23 +40,28 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev);
 #define BMP5_FIFO_DATA_BUFFER_SIZE  UINT8_C(96)
 #define BMP5_FIFO_DATA_USER_LENGTH  UINT8_C(96)
 #define BMP5_FIFO_P_T_FRAME_COUNT   UINT8_C(16)
-#define BMP5_FIFO_T_FRAME_COUNT     UINT8_C(32)
-#define BMP5_FIFO_P_FRAME_COUNT     UINT8_C(32)
+
+/*#define BMP5_USE_FIXED_POINT */
 
 /******************************************************************************/
 /*!            Functions                                        */
 
 int main(void)
 {
+    /* Variable to store the result of API calls */
     int8_t rslt;
+
+    /* Device structure to hold sensor configuration and interface details */
     struct bmp5_dev dev;
+
+    /* FIFO structure to hold FIFO configuration and data */
     struct bmp5_fifo fifo;
 
     /* Interface reference is given as a parameter
      * For I2C : BMP5_I2C_INTF
      * For SPI : BMP5_SPI_INTF
      */
-    rslt = bmp5_interface_init(&dev, BMP5_I2C_INTF);
+    rslt = bmp5_interface_init(&dev, BMP5_SPI_INTF);
     bmp5_error_codes_print_result("bmp5_interface_init", rslt);
 
     if (rslt == BMP5_OK)
@@ -85,9 +89,16 @@ int main(void)
 
 static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
+    /* Variable to store the result of API calls */
     int8_t rslt;
+
+    /* Structure to hold IIR filter configuration */
     struct bmp5_iir_config set_iir_cfg;
+
+    /* Structure to hold oversampling and ODR configuration for pressure */
     struct bmp5_osr_odr_press_config osr_odr_press_cfg;
+
+    /* Structure to hold interrupt source selection configuration */
     struct bmp5_int_source_select int_source_select;
 
     rslt = bmp5_set_power_mode(BMP5_POWERMODE_STANDBY, dev);
@@ -116,6 +127,11 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
             rslt = bmp5_set_osr_odr_press_config(&osr_odr_press_cfg, dev);
             bmp5_error_codes_print_result("bmp5_set_osr_odr_press_config", rslt);
+            printf("OSR ODR configurations\n");
+            printf("OSR T : %u\n", osr_odr_press_cfg.osr_t);
+            printf("OSR P : %u\n", osr_odr_press_cfg.osr_p);
+            printf("ODR   : %u\n", osr_odr_press_cfg.odr);
+            printf("Press Enable : %u\n\n", osr_odr_press_cfg.press_en);
 
             if (rslt == BMP5_OK)
             {
@@ -124,6 +140,10 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
                 rslt = bmp5_set_iir_config(&set_iir_cfg, dev);
                 bmp5_error_codes_print_result("bmp5_set_iir_config", rslt);
+                printf("IIR configurations\n\n");
+                printf("IIR T : %u\n", set_iir_cfg.set_iir_t);
+                printf("IIR P : %u\n\n", set_iir_cfg.set_iir_p);
+
             }
         }
 
@@ -135,13 +155,6 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
             if (rslt == BMP5_OK)
             {
                 fifo->mode = BMP5_FIFO_MODE_STREAMING;
-
-                /* Frame selection can be used to select data frames,
-                 * pressure data only(32 frames) - BMP5_FIFO_PRESSURE_DATA
-                 * temperature data only(32 frames) - BMP5_FIFO_TEMPERATURE_DATA
-                 * both pressure and temperature data(16 frames) - BMP5_FIFO_PRESS_TEMP_DATA
-                 * Here, both pressure and temperature data is selected(BMP5_FIFO_PRESS_TEMP_DATA)
-                 */
                 fifo->frame_sel = BMP5_FIFO_PRESS_TEMP_DATA;
 
                 fifo->dec_sel = BMP5_FIFO_NO_DOWNSAMPLING;
@@ -150,6 +163,13 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
                 rslt = bmp5_set_fifo_configuration(fifo, dev);
                 bmp5_error_codes_print_result("bmp5_set_fifo_configuration", rslt);
+                printf("FIFO configurations\n\n");
+                printf("FIFO Mode : %u\n", fifo->mode);
+                printf("FIFO Frame Selection : %u\n", fifo->frame_sel);
+                printf("FIFO Decimation Selection : %u\n", fifo->dec_sel);
+                printf("FIFO IIR T : %u\n", fifo->set_fifo_iir_t);
+                printf("FIFO IIR P : %u\n\n", fifo->set_fifo_iir_p);
+
             }
         }
 
@@ -170,11 +190,11 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
         /*
          * FIFO example can be executed on,
          * normal mode - BMP5_POWERMODE_NORMAL
-         * continuous mode - BMP5_POWERMODE_CONTINOUS
+         * continuous mode - BMP5_POWERMODE_CONTINUOUS
          * Here, used normal mode (BMP5_POWERMODE_NORMAL)
          */
         rslt = bmp5_set_power_mode(BMP5_POWERMODE_NORMAL, dev);
-        bmp5_error_codes_print_result("bmp5_set_power_mode2", rslt);
+        bmp5_error_codes_print_result("bmp5_set_power_mode", rslt);
     }
 
     return rslt;
@@ -182,11 +202,22 @@ static int8_t set_config(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
 static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
+    /* Variable to store the result of API calls */
     int8_t rslt = 0;
+
+    /* Index variable for iterating through sensor data */
     uint8_t idx = 0;
+
+    /* Loop counter for the number of iterations */
     uint8_t loop = 0;
+
+    /* Variable to store interrupt status */
     uint8_t int_status;
+
+    /* Buffer to hold FIFO data */
     uint8_t fifo_buffer[BMP5_FIFO_DATA_BUFFER_SIZE];
+
+    /* Array to hold extracted sensor data from FIFO */
     struct bmp5_sensor_data sensor_data[BMP5_FIFO_P_T_FRAME_COUNT] = { { 0 } };
 
     printf("\nOutput :\n");
@@ -203,13 +234,13 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
             printf("\nIteration: %d\n", loop);
             printf("Each fifo frame contains 6 bytes of data\n");
-            printf("Fifo data bytes requested: %d\n", fifo->length);
+            printf("Fifo data bytes requested: %u\n", fifo->length);
 
             rslt = bmp5_get_fifo_data(fifo, dev);
             bmp5_error_codes_print_result("bmp5_get_fifo_data", rslt);
 
-            printf("Fifo data bytes available: %d\n", fifo->length);
-            printf("Fifo frames available: %d\n", fifo->fifo_count);
+            printf("Fifo data bytes available: %u\n", fifo->length);
+            printf("Fifo frames available: %u\n", fifo->fifo_count);
 
             if (rslt == BMP5_OK)
             {
@@ -218,17 +249,18 @@ static int8_t get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
                 if (rslt == BMP5_OK)
                 {
-                    printf("\nData, Pressure (Pa), Temperature (deg C)\n");
+                    printf("\n%-10s %-20s %-20s\n", "Index", "Pressure (Pa)", "Temperature (deg C)");
+                    printf("-------------------------------------------------------------\n");
 
                     for (idx = 0; idx < fifo->fifo_count; idx++)
                     {
 #ifdef BMP5_USE_FIXED_POINT
-                        printf("%d, %lu, %ld\n",
+                        printf("%-10u %-20lu %-20ld\n",
                                idx,
                                (long unsigned int)sensor_data[idx].pressure,
                                (long int)sensor_data[idx].temperature);
 #else
-                        printf("%d, %f, %f\n", idx, sensor_data[idx].pressure, sensor_data[idx].temperature);
+                        printf("%-10u %-20f %-20f\n", idx, sensor_data[idx].pressure, sensor_data[idx].temperature);
 #endif
                     }
                 }

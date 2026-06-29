@@ -1,6 +1,6 @@
 COINES_INSTALL_PATH ?= ../../../..
 
-EXAMPLE_FILE ?= oor_read_sensor_data_continous_mode.c
+EXAMPLE_FILE ?= fifo_full_interrupt_press_temp.c
 
 API_LOCATION ?= ../..
 

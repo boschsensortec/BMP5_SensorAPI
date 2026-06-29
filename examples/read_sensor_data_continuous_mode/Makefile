@@ -1,6 +1,6 @@
 COINES_INSTALL_PATH ?= ../../../..
 
-EXAMPLE_FILE ?= read_sensor_data_continous_mode.c
+EXAMPLE_FILE ?= read_sensor_data_continuous_mode.c
 
 API_LOCATION ?= ../..
 

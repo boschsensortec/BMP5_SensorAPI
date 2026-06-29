@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
+* Copyright (c) 2026 Bosch Sensortec GmbH. All rights reserved.
 *
 * BSD-3-Clause
 *
@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5.c
-* @date       2022-08-11
-* @version    v1.1.1
+* @date       2026-05-29
+* @version    v1.5.0
 *
 */
 
@@ -41,6 +41,12 @@
 /*!             Header files
  ****************************************************************************/
 #include "bmp5.h"
+
+#ifdef BMP5_USE_FIXED_POINT
+#ifdef __KERNEL__
+#include <linux/math64.h>
+#endif /* __KERNEL__ */
+#endif
 
 /***************************************************************************/
 
@@ -77,7 +83,7 @@ static int8_t null_ptr_check(const struct bmp5_dev *dev);
 static int8_t validate_chip_id(uint8_t chip_id, struct bmp5_dev *dev);
 
 /*!
- * @brief This internal API is used to validate the post power-up procedure.
+ * @brief This internal API is used to validate the NVM readiness.
  *
  * @param[in] dev     : Structure instance of bmp5_dev.
  *
@@ -85,12 +91,12 @@ static int8_t validate_chip_id(uint8_t chip_id, struct bmp5_dev *dev);
  * @retval 0 -> Success
  * @retval <0 -> Fail
  */
-static int8_t power_up_check(struct bmp5_dev *dev);
+static int8_t nvm_ready_check(struct bmp5_dev *dev);
 
 /*!
  * @brief This internal API is used to check if sensor is in deepstandby mode.
  *
- * @param[out] powermode : To store whether sensor is in deepstanby mode.
+ * @param[out] powermode : To store whether sensor is in deepstandby mode.
  * @param[in] dev        : Structure instance of bmp5_dev.
  *
  * @return Result of API execution status
@@ -112,7 +118,7 @@ static int8_t set_deep_standby_mode(struct bmp5_dev *dev);
 
 /*!
  * @brief This internal API is used to set sensor in standby or
- * normal or forced or continous powermode.
+ * normal or forced or continuous powermode.
  *
  * @param[in] powermode : Select desired powermode.
  * @param[in] dev       : Structure instance of bmp5_dev.
@@ -202,6 +208,47 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
                                  const struct bmp5_fifo *fifo);
 
 /*!
+ * @brief This internal API verifies if all bytes in a frame are empty markers.
+ */
+static uint8_t is_fifo_frame_empty(const struct bmp5_fifo *fifo, uint16_t data_index, uint8_t frame_length);
+
+/*!
+ * @brief This internal API validates a frame before unpacking.
+ */
+static int8_t validate_fifo_frame(const struct bmp5_fifo *fifo, uint16_t *data_index, uint8_t frame_length);
+
+/*!
+ * @brief This internal API converts raw 24-bit temperature bytes to signed 32-bit.
+ */
+static int32_t parse_raw_temperature(const struct bmp5_fifo *fifo, uint16_t data_index);
+
+/*!
+ * @brief This internal API converts raw 24-bit pressure bytes to unsigned 32-bit.
+ */
+static uint32_t parse_raw_pressure(const struct bmp5_fifo *fifo, uint16_t data_index);
+
+/*!
+ * @brief This internal API unpacks one temperature frame.
+ */
+static int8_t unpack_temperature_frame(struct bmp5_sensor_data *sensor_data,
+                                       uint16_t *data_index,
+                                       const struct bmp5_fifo *fifo);
+
+/*!
+ * @brief This internal API unpacks one pressure frame.
+ */
+static int8_t unpack_pressure_frame(struct bmp5_sensor_data *sensor_data,
+                                    uint16_t *data_index,
+                                    const struct bmp5_fifo *fifo);
+
+/*!
+ * @brief This internal API unpacks one pressure+temperature frame.
+ */
+static int8_t unpack_press_temp_frame(struct bmp5_sensor_data *sensor_data,
+                                      uint16_t *data_index,
+                                      const struct bmp5_fifo *fifo);
+
+/*!
  * @brief This internal API sets the IIR configuration and count limit of OOR pressure.
  *
  * @param[in] set_oor_iir_p   : Variable to store the OOR IIR value for pressure.
@@ -287,7 +334,7 @@ static int8_t set_nvm_addr(uint8_t nvm_addr, uint8_t prog_en, struct bmp5_dev *d
 */
 int8_t bmp5_init(struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
     uint8_t chip_id;
 
@@ -316,8 +363,8 @@ int8_t bmp5_init(struct bmp5_dev *dev)
             {
                 if (chip_id != 0)
                 {
-                    /* Validate post power-up procedure */
-                    rslt = power_up_check(dev);
+                    /* Validate NVM readiness */
+                    rslt = nvm_ready_check(dev);
                 }
                 else
                 {
@@ -340,7 +387,7 @@ int8_t bmp5_init(struct bmp5_dev *dev)
  */
 int8_t bmp5_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Check for null pointer in the device structure */
     rslt = null_ptr_check(dev);
@@ -377,7 +424,7 @@ int8_t bmp5_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint32_t len, struct b
  */
 int8_t bmp5_set_regs(uint8_t reg_addr, const uint8_t *reg_data, uint32_t len, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t idx = 0;
 
     /* Check for null pointer in the device structure */
@@ -420,7 +467,7 @@ int8_t bmp5_set_regs(uint8_t reg_addr, const uint8_t *reg_data, uint32_t len, st
  */
 int8_t bmp5_soft_reset(struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
     uint8_t por_status;
     uint8_t data = BMP5_SOFT_RESET_CMD;
@@ -468,7 +515,7 @@ int8_t bmp5_soft_reset(struct bmp5_dev *dev)
  */
 int8_t bmp5_get_interrupt_status(uint8_t *int_status, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     if (int_status != NULL)
     {
@@ -487,7 +534,7 @@ int8_t bmp5_get_interrupt_status(uint8_t *int_status, struct bmp5_dev *dev)
  */
 int8_t bmp5_get_power_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t deep_dis;
     uint8_t reg_data;
     uint8_t pwrmode;
@@ -529,8 +576,8 @@ int8_t bmp5_get_power_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev)
                 case BMP5_POWERMODE_FORCED:
                     *powermode = BMP5_POWERMODE_FORCED;
                     break;
-                case BMP5_POWERMODE_CONTINOUS:
-                    *powermode = BMP5_POWERMODE_CONTINOUS;
+                case BMP5_POWERMODE_CONTINUOUS:
+                    *powermode = BMP5_POWERMODE_CONTINUOUS;
                     break;
                 default:
                     rslt = BMP5_E_INVALID_POWERMODE;
@@ -551,7 +598,7 @@ int8_t bmp5_get_power_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev)
  */
 int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     enum bmp5_powermode lst_pwrmode;
 
     /* Existing power mode of the device is received in lst_pwrmode */
@@ -565,7 +612,7 @@ int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev)
         if (lst_pwrmode != BMP5_POWERMODE_STANDBY)
         {
             /* Device should be set to standby before transiting to
-             * forced mode or normal mode or continous mode.
+             * forced mode or normal mode or continuous mode.
              */
             rslt = set_power_mode(BMP5_POWERMODE_STANDBY, dev);
 
@@ -592,7 +639,7 @@ int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev)
                     break;
                 case BMP5_POWERMODE_NORMAL:
                 case BMP5_POWERMODE_FORCED:
-                case BMP5_POWERMODE_CONTINOUS:
+                case BMP5_POWERMODE_CONTINUOUS:
                     rslt = set_power_mode(powermode, dev);
                     break;
                 default:
@@ -613,50 +660,74 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
                             const struct bmp5_osr_odr_press_config *osr_odr_press_cfg,
                             struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data[6] = { 0 };
     int32_t raw_data_t;
     uint32_t raw_data_p;
+    uint32_t raw_data_t_u32;
 
-    rslt = bmp5_get_regs(BMP5_REG_TEMP_DATA_XLSB, reg_data, 6, dev);
-
-    if (rslt == BMP5_OK)
+    if ((sensor_data == NULL) || (osr_odr_press_cfg == NULL))
     {
-        raw_data_t = (int32_t) ((int32_t) ((uint32_t)(((uint32_t)reg_data[2] << 16) | ((uint16_t)reg_data[1] << 8) | reg_data[0]) << 8) >> 8);
+        rslt = BMP5_E_NULL_PTR;
+    }
+    else
+    {
+        /* Read the raw temperature and pressure data in burst read */
 
-#ifdef BMP5_USE_FIXED_POINT
+        rslt = bmp5_get_regs(BMP5_REG_TEMP_DATA_XLSB, reg_data, 6, dev);
 
-        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
-         * precision in deg C
-         */
-        sensor_data->temperature =
-            (int64_t)((raw_data_t / (float)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
-#else
-
-        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
-        sensor_data->temperature = (float)(raw_data_t / 65536.0);
-#endif
-
-        if (osr_odr_press_cfg->press_en == BMP5_ENABLE)
+        if (rslt == BMP5_OK)
         {
-            raw_data_p = (uint32_t)((uint32_t)(reg_data[5] << 16) | (uint16_t)(reg_data[4] << 8) | reg_data[3]);
+
+            raw_data_t_u32 = ((uint32_t)reg_data[2] << 16U) | ((uint32_t)reg_data[1] << 8U) | (uint32_t)reg_data[0];
+
+            /* Convert 24-bit two's complement temperature value to signed 32-bit */
+            if ((raw_data_t_u32 & 0x800000U) != 0U)
+            {
+                raw_data_t = (int32_t)(raw_data_t_u32 | 0xFF000000U);
+            }
+            else
+            {
+                raw_data_t = (int32_t)raw_data_t_u32;
+            }
 
 #ifdef BMP5_USE_FIXED_POINT
 
-            /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
-             * precision in Pa
+            /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
+             * precision in deg C
              */
-            sensor_data->pressure =
-                (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
+            sensor_data->temperature = div_s64(raw_data_t, 65536);
 #else
 
-            /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
-            sensor_data->pressure = (float)(raw_data_p / 64.0);
+            /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
+            sensor_data->temperature = (float)(raw_data_t / 65536.0);
 #endif
-        }
-        else
-        {
-            sensor_data->pressure = 0.0;
+
+            if (osr_odr_press_cfg->press_en == BMP5_ENABLE)
+            {
+                raw_data_p =
+                    (uint32_t)(((uint32_t)reg_data[5] << 16) | ((uint32_t)reg_data[4] << 8) | (uint32_t)reg_data[3]);
+
+#ifdef BMP5_USE_FIXED_POINT
+
+                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
+                 * precision in Pa
+                 */
+                sensor_data->pressure = div_u64(raw_data_p, 64);
+#else
+
+                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
+                sensor_data->pressure = (float)(raw_data_p / 64.0);
+#endif
+            }
+            else
+            {
+#ifdef BMP5_USE_FIXED_POINT
+                sensor_data->pressure = 0;
+#else
+                sensor_data->pressure = 0.0;
+#endif
+            }
         }
     }
 
@@ -669,7 +740,7 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
  */
 int8_t bmp5_int_source_select(const struct bmp5_int_source_select *int_source_select, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
 
     if (int_source_select != NULL)
@@ -707,7 +778,7 @@ int8_t bmp5_configure_interrupt(enum bmp5_intr_mode int_mode,
                                 struct bmp5_dev *dev)
 {
     /* Variable to store the function result */
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to get interrupt configuration */
     uint8_t reg_data = 0;
@@ -756,7 +827,7 @@ int8_t bmp5_configure_interrupt(enum bmp5_intr_mode int_mode,
 int8_t bmp5_get_osr_odr_press_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev)
 {
     /* Variable to store the function result */
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to store OSR and ODR config */
     uint8_t reg_data[2];
@@ -839,7 +910,7 @@ int8_t bmp5_set_osr_odr_press_config(const struct bmp5_osr_odr_press_config *osr
 int8_t bmp5_get_iir_config(struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev)
 {
     /* Variable to store the function result */
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to get IIR config */
     uint8_t reg_data[2];
@@ -849,12 +920,15 @@ int8_t bmp5_get_iir_config(struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev
         /* Get IIR configuration */
         rslt = bmp5_get_regs(BMP5_REG_DSP_CONFIG, reg_data, 2, dev);
 
-        iir_cfg->shdw_set_iir_t = BMP5_GET_BITSLICE(reg_data[0], BMP5_SHDW_SET_IIR_TEMP);
-        iir_cfg->shdw_set_iir_p = BMP5_GET_BITSLICE(reg_data[0], BMP5_SHDW_SET_IIR_PRESS);
-        iir_cfg->iir_flush_forced_en = BMP5_GET_BITSLICE(reg_data[0], BMP5_IIR_FLUSH_FORCED_EN);
+        if (rslt == BMP5_OK)
+        {
+            iir_cfg->shdw_set_iir_t = BMP5_GET_BITSLICE(reg_data[0], BMP5_SHDW_SET_IIR_TEMP);
+            iir_cfg->shdw_set_iir_p = BMP5_GET_BITSLICE(reg_data[0], BMP5_SHDW_SET_IIR_PRESS);
+            iir_cfg->iir_flush_forced_en = BMP5_GET_BITSLICE(reg_data[0], BMP5_IIR_FLUSH_FORCED_EN);
 
-        iir_cfg->set_iir_t = BMP5_GET_BITS_POS_0(reg_data[1], BMP5_SET_IIR_TEMP);
-        iir_cfg->set_iir_p = BMP5_GET_BITSLICE(reg_data[1], BMP5_SET_IIR_PRESS);
+            iir_cfg->set_iir_t = BMP5_GET_BITS_POS_0(reg_data[1], BMP5_SET_IIR_TEMP);
+            iir_cfg->set_iir_p = BMP5_GET_BITSLICE(reg_data[1], BMP5_SET_IIR_PRESS);
+        }
     }
     else
     {
@@ -938,7 +1012,7 @@ int8_t bmp5_set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_de
 int8_t bmp5_get_osr_odr_eff(struct bmp5_osr_odr_eff *osr_odr_eff, struct bmp5_dev *dev)
 {
     /* Variable to store the function result */
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to store effective OSR */
     uint8_t reg_data;
@@ -973,7 +1047,7 @@ int8_t bmp5_get_fifo_configuration(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 
     if (fifo != NULL)
     {
-        /* Get the fifo congifurations */
+        /* Get the fifo configurations */
         rslt = bmp5_get_regs(BMP5_REG_FIFO_CONFIG, &reg_data, 1, dev);
 
         if (rslt == BMP5_OK)
@@ -1019,7 +1093,7 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
 {
     int8_t rslt = 0;
     uint8_t reg_data;
-    uint8_t set_fifo_iir_t, set_fifo_iit_p;
+    uint8_t set_fifo_iir_t, set_fifo_iir_p;
 
     if (fifo != NULL)
     {
@@ -1034,13 +1108,13 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
         if (rslt == BMP5_OK)
         {
             set_fifo_iir_t = fifo->set_fifo_iir_t;
-            set_fifo_iit_p = fifo->set_fifo_iir_p;
+            set_fifo_iir_p = fifo->set_fifo_iir_p;
 
-            rslt = set_fifo_iir_config(set_fifo_iir_t, set_fifo_iit_p, dev);
+            rslt = set_fifo_iir_config(set_fifo_iir_t, set_fifo_iir_p, dev);
 
             if (rslt == BMP5_OK)
             {
-                /* Get the fifo congifurations */
+                /* Get the fifo configurations */
                 rslt = bmp5_get_regs(BMP5_REG_FIFO_CONFIG, &reg_data, 1, dev);
 
                 if (rslt == BMP5_OK)
@@ -1052,7 +1126,7 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
 
                 if (rslt == BMP5_OK)
                 {
-                    /* Set the fifo congifurations */
+                    /* Set the fifo configurations */
                     rslt = bmp5_set_regs(BMP5_REG_FIFO_CONFIG, &reg_data, 1, dev);
                 }
 
@@ -1069,7 +1143,7 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
 
                 if (rslt == BMP5_OK)
                 {
-                    /* Set the fifo congifurations */
+                    /* Set the fifo configurations */
                     rslt = bmp5_set_regs(BMP5_REG_FIFO_SEL, &reg_data, 1, dev);
                 }
             }
@@ -1088,7 +1162,7 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
  */
 int8_t bmp5_get_fifo_len(uint16_t *fifo_len, struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
 
     if ((fifo != NULL) && (fifo_len != NULL))
@@ -1129,7 +1203,7 @@ int8_t bmp5_get_fifo_len(uint16_t *fifo_len, struct bmp5_fifo *fifo, struct bmp5
  */
 int8_t bmp5_get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint16_t fifo_len;
 
     if (fifo != NULL)
@@ -1167,7 +1241,7 @@ int8_t bmp5_extract_fifo_data(const struct bmp5_fifo *fifo, struct bmp5_sensor_d
     uint16_t data_indx;
 
     /* Proceed if null check is fine */
-    if ((fifo != NULL) && (sensor_data != NULL))
+    if ((fifo != NULL) && ((fifo->data != NULL)) && (sensor_data != NULL))
     {
         for (data_indx = 0; (data_indx < fifo->length) && (rslt != BMP5_E_FIFO_FRAME_EMPTY);)
         {
@@ -1190,7 +1264,7 @@ int8_t bmp5_extract_fifo_data(const struct bmp5_fifo *fifo, struct bmp5_sensor_d
  */
 int8_t bmp5_get_oor_configuration(struct bmp5_oor_press_configuration *oor_press_config, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data[4];
 
     if (oor_press_config != NULL)
@@ -1206,7 +1280,7 @@ int8_t bmp5_get_oor_configuration(struct bmp5_oor_press_configuration *oor_press
             if (rslt == BMP5_OK)
             {
                 oor_press_config->oor_thr_p = reg_data[0] | (reg_data[1] << 8) |
-                                              ((reg_data[3] & BMP5_OOR_THR_P_XMSB_REG_MSK) << 16);
+                                              ((reg_data[3] & BMP5_OOR_THR_P_XMSB_REG_MSK) << BMP5_OOR_THR_P_XMSB_POS);
                 oor_press_config->oor_range_p = reg_data[2];
                 oor_press_config->cnt_lim = BMP5_GET_BITSLICE(reg_data[3], BMP5_OOR_COUNT_LIMIT);
             }
@@ -1226,7 +1300,7 @@ int8_t bmp5_get_oor_configuration(struct bmp5_oor_press_configuration *oor_press
  */
 int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor_press_config, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data[4];
     uint8_t thres_xmsb;
     uint8_t set_oor_iir_p, set_count_limit;
@@ -1252,7 +1326,7 @@ int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor
                 thres_xmsb = BMP5_GET_BITSLICE(oor_press_config->oor_thr_p, BMP5_OOR_THR_P_XMSB);
                 reg_data[3] = BMP5_SET_BITS_POS_0(reg_data[3], BMP5_OOR_THR_P_XMSB_REG, thres_xmsb);
 
-                /* Set the OOR congifurations */
+                /* Set the OOR configurations */
                 rslt = bmp5_set_regs(BMP5_REG_OOR_THR_P_LSB, reg_data, 4, dev);
             }
         }
@@ -1270,7 +1344,7 @@ int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor
  */
 int8_t bmp5_nvm_read(uint8_t nvm_addr, uint16_t *nvm_data, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
 
     /* Variable to store existing powermode */
@@ -1330,7 +1404,7 @@ int8_t bmp5_nvm_read(uint8_t nvm_addr, uint16_t *nvm_data, struct bmp5_dev *dev)
  */
 int8_t bmp5_nvm_write(uint8_t nvm_addr, const uint16_t *nvm_data, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     uint8_t nvm_status = 0;
 
@@ -1384,18 +1458,20 @@ int8_t bmp5_nvm_write(uint8_t nvm_addr, const uint16_t *nvm_data, struct bmp5_de
         {
             /* Check if NVM ready status = 1, NVM error status = 0 and NVM command error status = 0 */
             rslt = get_nvm_status(&nvm_status, dev);
-
-            if ((nvm_status & BMP5_INT_NVM_RDY) && (!(nvm_status & BMP5_INT_NVM_ERR)) &&
-                (!(nvm_status & BMP5_INT_NVM_CMD_ERR)))
+            if (rslt == BMP5_OK)
             {
-                /* Reset NVM prog_en */
-                reg_data = BMP5_SET_BIT_VAL_0(reg_data, BMP5_NVM_PROG_EN);
+                if ((nvm_status & BMP5_INT_NVM_RDY) && (!(nvm_status & BMP5_INT_NVM_ERR)) &&
+                    (!(nvm_status & BMP5_INT_NVM_CMD_ERR)))
+                {
+                    /* Reset NVM prog_en */
+                    reg_data = BMP5_SET_BIT_VAL_0(reg_data, BMP5_NVM_PROG_EN);
 
-                rslt = bmp5_set_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
-            }
-            else
-            {
-                rslt = BMP5_E_NVM_NOT_READY;
+                    rslt = bmp5_set_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
+                }
+                else
+                {
+                    rslt = BMP5_E_NVM_NOT_READY;
+                }
             }
         }
 
@@ -1426,7 +1502,7 @@ int8_t bmp5_nvm_write(uint8_t nvm_addr, const uint16_t *nvm_data, struct bmp5_de
  */
 static int8_t null_ptr_check(const struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     if ((dev == NULL) || (dev->read == NULL) || (dev->write == NULL) || (dev->delay_us == NULL))
     {
@@ -1447,7 +1523,7 @@ static int8_t null_ptr_check(const struct bmp5_dev *dev)
  */
 static int8_t validate_chip_id(uint8_t chip_id, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     if ((chip_id == BMP5_CHIP_ID_PRIM) || (chip_id == BMP5_CHIP_ID_SEC))
     {
@@ -1464,13 +1540,12 @@ static int8_t validate_chip_id(uint8_t chip_id, struct bmp5_dev *dev)
 }
 
 /*!
- * @brief This internal API is used to validate the post power-up procedure.
+ * @brief This internal API is used to validate the NVM readiness.
  */
-static int8_t power_up_check(struct bmp5_dev *dev)
+static int8_t nvm_ready_check(struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t nvm_status;
-    uint8_t por_status;
 
     rslt = get_nvm_status(&nvm_status, dev);
 
@@ -1479,24 +1554,11 @@ static int8_t power_up_check(struct bmp5_dev *dev)
         /* Check if nvm_rdy status = 1 and nvm_err status = 0 to proceed */
         if ((nvm_status & BMP5_INT_NVM_RDY) && (!(nvm_status & BMP5_INT_NVM_ERR)))
         {
-            rslt = bmp5_get_interrupt_status(&por_status, dev);
-
-            if (rslt == BMP5_OK)
-            {
-                /* Check if por/soft-reset complete status = 1 to proceed */
-                if (por_status & BMP5_INT_ASSERTED_POR_SOFTRESET_COMPLETE)
-                {
-                    rslt = BMP5_OK;
-                }
-                else
-                {
-                    rslt = BMP5_E_POWER_UP;
-                }
-            }
+            rslt = BMP5_OK;
         }
         else
         {
-            rslt = BMP5_E_POWER_UP;
+            rslt = BMP5_E_NVM_NOT_READY;
         }
     }
 
@@ -1508,16 +1570,17 @@ static int8_t power_up_check(struct bmp5_dev *dev)
  */
 static int8_t check_deepstandby_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev)
 {
-    int8_t rslt;
-    uint8_t fifo_frame_sel;
+    int8_t rslt = BMP5_OK;
+    uint8_t fifo_frame_sel = 0;
     struct bmp5_iir_config iir_cfg = { 0 };
     struct bmp5_osr_odr_press_config osr_odr_press_cfg = { 0 };
 
     rslt = bmp5_get_regs(BMP5_REG_FIFO_SEL, &fifo_frame_sel, 1, dev);
-    fifo_frame_sel = BMP5_GET_BITS_POS_0(fifo_frame_sel, BMP5_FIFO_FRAME_SEL);
 
     if (rslt == BMP5_OK)
     {
+        fifo_frame_sel = BMP5_GET_BITS_POS_0(fifo_frame_sel, BMP5_FIFO_FRAME_SEL);
+
         rslt = bmp5_get_osr_odr_press_config(&osr_odr_press_cfg, dev);
 
         if (rslt == BMP5_OK)
@@ -1529,10 +1592,13 @@ static int8_t check_deepstandby_mode(enum bmp5_powermode *powermode, struct bmp5
     /* As per datasheet odr should be less than 5Hz. But register value for 5Hz is less than 4Hz and so,
      * thus in this below condition odr is checked whether greater than 5Hz macro.
      */
-    if ((osr_odr_press_cfg.odr > BMP5_ODR_05_HZ) && (fifo_frame_sel == BMP5_DISABLE) &&
-        (iir_cfg.set_iir_t == BMP5_IIR_FILTER_BYPASS) && (iir_cfg.set_iir_p == BMP5_IIR_FILTER_BYPASS))
+    if (rslt == BMP5_OK)
     {
-        *powermode = BMP5_POWERMODE_DEEP_STANDBY;
+        if ((osr_odr_press_cfg.odr > BMP5_ODR_05_HZ) && (fifo_frame_sel == BMP5_DISABLE) &&
+            (iir_cfg.set_iir_t == BMP5_IIR_FILTER_BYPASS) && (iir_cfg.set_iir_p == BMP5_IIR_FILTER_BYPASS))
+        {
+            *powermode = BMP5_POWERMODE_DEEP_STANDBY;
+        }
     }
 
     return rslt;
@@ -1543,7 +1609,7 @@ static int8_t check_deepstandby_mode(enum bmp5_powermode *powermode, struct bmp5
  */
 static int8_t set_deep_standby_mode(struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
 
     rslt = bmp5_get_regs(BMP5_REG_ODR_CONFIG, &reg_data, 1, dev);
@@ -1596,11 +1662,11 @@ static int8_t set_deep_standby_mode(struct bmp5_dev *dev)
 }
 
 /*!
- * @brief This internal API is used to set sensor in standby or normal or forced or continous powermode.
+ * @brief This internal API is used to set sensor in standby or normal or forced or continuous powermode.
  */
 static int8_t set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data;
 
     rslt = bmp5_get_regs(BMP5_REG_ODR_CONFIG, &reg_data, 1, dev);
@@ -1623,7 +1689,7 @@ static int8_t set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev
  */
 static int8_t set_standby_mode(struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     enum bmp5_powermode pwrmode;
 
     rslt = bmp5_get_power_mode(&pwrmode, dev);
@@ -1667,7 +1733,7 @@ static uint32_t power(uint8_t base, uint8_t resolution)
  */
 static int8_t set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to set IIR config */
     uint8_t reg_data[2];
@@ -1680,7 +1746,7 @@ static int8_t set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_
         reg_data[0] = BMP5_SET_BITSLICE(reg_data[0], BMP5_SHDW_SET_IIR_PRESS, iir_cfg->shdw_set_iir_p);
         reg_data[0] = BMP5_SET_BITSLICE(reg_data[0], BMP5_IIR_FLUSH_FORCED_EN, iir_cfg->iir_flush_forced_en);
 
-        reg_data[1] = iir_cfg->set_iir_t;
+        reg_data[1] = BMP5_SET_BITSLICE(reg_data[1], BMP5_SET_IIR_TEMP, iir_cfg->set_iir_t);
         reg_data[1] = BMP5_SET_BITSLICE(reg_data[1], BMP5_SET_IIR_PRESS, iir_cfg->set_iir_p);
 
         /* Set IIR configuration */
@@ -1696,7 +1762,7 @@ static int8_t set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_
 static int8_t set_fifo_iir_config(uint8_t set_fifo_iir_t, uint8_t set_fifo_iir_p, struct bmp5_dev *dev)
 {
     /* Variable to store the function result */
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     /* Variable to set fifo IIR config */
     uint8_t reg_data = 0;
@@ -1783,6 +1849,164 @@ static int8_t set_fifo_threshold(uint8_t *reg_data, const struct bmp5_fifo *fifo
     return rslt;
 }
 
+/* Check whether all bytes in the selected frame are FIFO empty markers. */
+static uint8_t is_fifo_frame_empty(const struct bmp5_fifo *fifo, uint16_t data_index, uint8_t frame_length)
+{
+    uint8_t idx;
+
+    for (idx = 0; idx < frame_length; idx++)
+    {
+        if (fifo->data[data_index + idx] != BMP5_FIFO_EMPTY)
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+/* Validate frame bounds and frame content before unpacking payload bytes. */
+static int8_t validate_fifo_frame(const struct bmp5_fifo *fifo, uint16_t *data_index, uint8_t frame_length)
+{
+    if ((*data_index > fifo->length) || ((uint16_t)(fifo->length - *data_index) < frame_length) ||
+        is_fifo_frame_empty(fifo, *data_index, frame_length))
+    {
+        *data_index = fifo->length;
+
+        return BMP5_E_FIFO_FRAME_EMPTY;
+    }
+
+    return BMP5_OK;
+}
+
+/* Parse signed 24-bit temperature data from FIFO payload. */
+static int32_t parse_raw_temperature(const struct bmp5_fifo *fifo, uint16_t data_index)
+{
+    uint32_t raw_data_t_u32 = ((uint32_t)fifo->data[data_index + 2] << 16U) |
+                              ((uint32_t)fifo->data[data_index + 1] << 8U) | (uint32_t)fifo->data[data_index];
+
+    if ((raw_data_t_u32 & 0x800000U) != 0U)
+    {
+        return (int32_t)(raw_data_t_u32 | 0xFF000000U);
+    }
+
+    return (int32_t)raw_data_t_u32;
+}
+
+/* Parse unsigned 24-bit pressure data from FIFO payload. */
+static uint32_t parse_raw_pressure(const struct bmp5_fifo *fifo, uint16_t data_index)
+{
+    return (uint32_t)(((uint32_t)fifo->data[data_index + 2] << 16) | ((uint32_t)fifo->data[data_index + 1] << 8) |
+                      (uint32_t)fifo->data[data_index]);
+}
+
+static int8_t unpack_temperature_frame(struct bmp5_sensor_data *sensor_data,
+                                       uint16_t *data_index,
+                                       const struct bmp5_fifo *fifo)
+{
+    int8_t rslt = BMP5_OK;
+    int32_t raw_data_t;
+
+    rslt = validate_fifo_frame(fifo, data_index, UINT8_C(3));
+
+    if (rslt == BMP5_OK)
+    {
+        raw_data_t = parse_raw_temperature(fifo, *data_index);
+
+#ifdef BMP5_USE_FIXED_POINT
+
+        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
+         * precision in deg C
+         */
+        sensor_data->temperature = div_s64(raw_data_t, 65536);
+        sensor_data->pressure = 0;
+#else
+
+        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
+        sensor_data->temperature = (float)(raw_data_t / 65536.0);
+        sensor_data->pressure = 0.0;
+#endif
+
+        *data_index += 3;
+    }
+
+    return rslt;
+}
+
+static int8_t unpack_pressure_frame(struct bmp5_sensor_data *sensor_data,
+                                    uint16_t *data_index,
+                                    const struct bmp5_fifo *fifo)
+{
+    int8_t rslt = BMP5_OK;
+    uint32_t raw_data_p;
+
+    rslt = validate_fifo_frame(fifo, data_index, UINT8_C(3));
+
+    if (rslt == BMP5_OK)
+    {
+        raw_data_p = parse_raw_pressure(fifo, *data_index);
+
+#ifdef BMP5_USE_FIXED_POINT
+
+        /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
+         * precision in Pa
+         */
+        sensor_data->pressure = div_u64(raw_data_p, 64);
+        sensor_data->temperature = 0;
+#else
+
+        /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
+        sensor_data->pressure = (float)(raw_data_p / 64.0);
+        sensor_data->temperature = 0.0;
+#endif
+
+        *data_index += 3;
+    }
+
+    return rslt;
+}
+
+static int8_t unpack_press_temp_frame(struct bmp5_sensor_data *sensor_data,
+                                      uint16_t *data_index,
+                                      const struct bmp5_fifo *fifo)
+{
+    int8_t rslt = BMP5_OK;
+    int32_t raw_data_t;
+    uint32_t raw_data_p;
+
+    rslt = validate_fifo_frame(fifo, data_index, UINT8_C(6));
+
+    if (rslt == BMP5_OK)
+    {
+        raw_data_t = parse_raw_temperature(fifo, *data_index);
+        raw_data_p = parse_raw_pressure(fifo, (uint16_t)(*data_index + 3));
+
+#ifdef BMP5_USE_FIXED_POINT
+
+        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
+         * precision in deg C
+         */
+        sensor_data->temperature = div_s64(raw_data_t, 65536);
+
+        /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
+         * precision in Pa
+         */
+        sensor_data->pressure = div_u64(raw_data_p, 64);
+#else
+
+        /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
+        sensor_data->temperature = (float)(raw_data_t / 65536.0);
+
+        /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
+        sensor_data->pressure = (float)(raw_data_p / 64.0);
+#endif
+
+        *data_index += 6;
+    }
+
+    return rslt;
+}
+
 /*!
 * @brief This internal API is used to unpack the fifo data and store it in the bmp5_sensor_data structure.
  */
@@ -1790,134 +2014,23 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
                                  uint16_t *data_index,
                                  const struct bmp5_fifo *fifo)
 {
-    int8_t rslt = 0;
-    int32_t raw_data_t;
-    uint32_t raw_data_p;
+    int8_t rslt = BMP5_OK;
 
     switch (fifo->frame_sel)
     {
         case BMP5_FIFO_TEMPERATURE_DATA:
-
-            /* Check if fifo frame is empty */
-            if (!((fifo->data[*data_index] == BMP5_FIFO_EMPTY) && (fifo->data[*data_index + 1] == BMP5_FIFO_EMPTY) &&
-                  (fifo->data[*data_index + 2] == BMP5_FIFO_EMPTY)))
-            {
-                raw_data_t =
-                    (int32_t)((uint32_t)fifo->data[*data_index + 2] << 16 | (uint16_t)fifo->data[*data_index + 1] << 8 |
-                        fifo->data[*data_index]);
-
-#ifdef BMP5_USE_FIXED_POINT
-
-                /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
-                 * precision in deg C
-                 */
-                sensor_data->temperature =
-                    (int64_t)((raw_data_t / (float)65536.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
-#else
-
-                /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
-                sensor_data->temperature = (float)(raw_data_t / 65536.0);
-#endif
-
-                sensor_data->pressure = 0.0;
-                *data_index += 3;
-            }
-            else
-            {
-                rslt = BMP5_E_FIFO_FRAME_EMPTY;
-
-                /* Move the data index to the last byte to mark completion */
-                *data_index = fifo->length;
-            }
-
+            rslt = unpack_temperature_frame(sensor_data, data_index, fifo);
             break;
         case BMP5_FIFO_PRESSURE_DATA:
-
-            /* Check if fifo frame is empty */
-            if (!((fifo->data[*data_index] == BMP5_FIFO_EMPTY) && (fifo->data[*data_index + 1] == BMP5_FIFO_EMPTY) &&
-                  (fifo->data[*data_index + 2] == BMP5_FIFO_EMPTY)))
-            {
-                raw_data_p =
-                    (uint32_t)((uint32_t)fifo->data[(*data_index) + 2] << 16 |
-                               (uint16_t)fifo->data[(*data_index) + 1] << 8 |
-                        fifo->data[*data_index]);
-
-#ifdef BMP5_USE_FIXED_POINT
-
-                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
-                 * precision in Pa
-                 */
-                sensor_data->pressure =
-                    (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
-#else
-
-                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
-                sensor_data->pressure = (float)(raw_data_p / 64.0);
-#endif
-
-                sensor_data->temperature = 0.0;
-                *data_index += 3;
-            }
-            else
-            {
-                rslt = BMP5_E_FIFO_FRAME_EMPTY;
-
-                /* Move the data index to the last byte to mark completion */
-                *data_index = fifo->length;
-            }
-
+            rslt = unpack_pressure_frame(sensor_data, data_index, fifo);
             break;
         case BMP5_FIFO_PRESS_TEMP_DATA:
-            if (!((fifo->data[*data_index] == BMP5_FIFO_EMPTY) && (fifo->data[*data_index + 1] == BMP5_FIFO_EMPTY) &&
-                  (fifo->data[*data_index + 2] == BMP5_FIFO_EMPTY) &&
-                  (fifo->data[*data_index + 3] == BMP5_FIFO_EMPTY) &&
-                  (fifo->data[*data_index + 4] == BMP5_FIFO_EMPTY) && (fifo->data[*data_index + 5] == BMP5_FIFO_EMPTY)))
-            {
-                raw_data_t =
-                    (int32_t)((uint32_t)fifo->data[*data_index + 2] << 16 | (uint16_t)fifo->data[*data_index + 1] << 8 |
-                        fifo->data[*data_index]);
-
-                raw_data_p =
-                    (uint32_t)((uint32_t)fifo->data[(*data_index) + 5] << 16 |
-                               (uint16_t)fifo->data[(*data_index) + 4] << 8 |
-                        fifo->data[*data_index + 3]);
-
-#ifdef BMP5_USE_FIXED_POINT
-
-                /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data and followed by fixed point digit
-                 * precision in deg C
-                 */
-                sensor_data->temperature =
-                    (int64_t)((raw_data_t / (float)(float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
-
-                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data and followed by fixed point digit
-                 * precision in Pa
-                 */
-                sensor_data->pressure =
-                    (uint64_t)((raw_data_p / (float)64.0) * (power(10, BMP5_FIXED_POINT_DIGIT_PRECISION)));
-#else
-
-                /* Division by 2^16(whose equivalent value is 65536) is performed to get temperature data in deg C */
-                sensor_data->temperature = (float)(raw_data_t / 65536.0);
-
-                /* Division by 2^6(whose equivalent value is 64) is performed to get pressure data in Pa */
-                sensor_data->pressure = (float)(raw_data_p / 64.0);
-#endif
-
-                *data_index += 6;
-            }
-            else
-            {
-                rslt = BMP5_E_FIFO_FRAME_EMPTY;
-
-                /* Move the data index to the last byte to mark completion */
-                *data_index = fifo->length;
-            }
-
+            rslt = unpack_press_temp_frame(sensor_data, data_index, fifo);
             break;
         default:
-            sensor_data->pressure = 0.0;
-            sensor_data->temperature = 0.0;
+            sensor_data->pressure = 0;
+            sensor_data->temperature = 0;
+            rslt = BMP5_OK;
             break;
     }
 
@@ -1929,7 +2042,7 @@ static int8_t unpack_sensor_data(struct bmp5_sensor_data *sensor_data,
  */
 static int8_t set_oor_iir_count_limit(uint8_t set_oor_iir_p, uint8_t set_count_limit, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
     uint8_t reg_data = 0;
 
     /* Variable to store existing powermode */
@@ -2000,7 +2113,7 @@ static int8_t set_oor_iir_count_limit(uint8_t set_oor_iir_p, uint8_t set_count_l
  */
 static int8_t nvm_write_addr(uint8_t nvm_addr, uint8_t prog_en, enum bmp5_powermode *curr_pwrmode, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     if ((nvm_addr >= BMP5_NVM_START_ADDR) && (nvm_addr <= BMP5_NVM_END_ADDR))
     {
@@ -2036,39 +2149,42 @@ static int8_t nvm_write_addr(uint8_t nvm_addr, uint8_t prog_en, enum bmp5_powerm
  */
 static int8_t set_nvm_addr(uint8_t nvm_addr, uint8_t prog_en, struct bmp5_dev *dev)
 {
-    int8_t rslt;
-    uint8_t nvm_status;
-    uint8_t reg_data;
+    int8_t rslt = BMP5_OK;
+    uint8_t nvm_status = 0;
+    uint8_t reg_data = 0;
 
     /* Check if NVM ready status = 1 */
     rslt = get_nvm_status(&nvm_status, dev);
 
-    if (nvm_status & BMP5_INT_NVM_RDY)
+    if (rslt == BMP5_OK)
     {
-        rslt = bmp5_get_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
-
-        if (rslt == BMP5_OK)
+        if (nvm_status & BMP5_INT_NVM_RDY)
         {
-            /* Write the NVM address */
-            reg_data = BMP5_SET_BITS_POS_0(reg_data, BMP5_NVM_ADDR, nvm_addr);
+            rslt = bmp5_get_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
 
-            if (prog_en == BMP5_ENABLE)
+            if (rslt == BMP5_OK)
             {
-                /* Set bit nvm_prog_en as 1 if NVM write is selected */
-                reg_data = BMP5_SET_BITSLICE(reg_data, BMP5_NVM_PROG_EN, prog_en);
-            }
-            else
-            {
-                /* Set bit nvm_prog_en as 0 if NVM read is selected */
-                reg_data = BMP5_SET_BIT_VAL_0(reg_data, BMP5_NVM_PROG_EN);
-            }
+                /* Write the NVM address */
+                reg_data = BMP5_SET_BITS_POS_0(reg_data, BMP5_NVM_ADDR, nvm_addr);
 
-            rslt = bmp5_set_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
+                if (prog_en == BMP5_ENABLE)
+                {
+                    /* Set bit nvm_prog_en as 1 if NVM write is selected */
+                    reg_data = BMP5_SET_BITSLICE(reg_data, BMP5_NVM_PROG_EN, prog_en);
+                }
+                else
+                {
+                    /* Set bit nvm_prog_en as 0 if NVM read is selected */
+                    reg_data = BMP5_SET_BIT_VAL_0(reg_data, BMP5_NVM_PROG_EN);
+                }
+
+                rslt = bmp5_set_regs(BMP5_REG_NVM_ADDR, &reg_data, 1, dev);
+            }
         }
-    }
-    else
-    {
-        rslt = BMP5_E_NVM_NOT_READY;
+        else
+        {
+            rslt = BMP5_E_NVM_NOT_READY;
+        }
     }
 
     return rslt;
@@ -2079,26 +2195,29 @@ static int8_t set_nvm_addr(uint8_t nvm_addr, uint8_t prog_en, struct bmp5_dev *d
  */
 static int8_t get_nvm_data(uint16_t *nvm_data, struct bmp5_dev *dev)
 {
-    int8_t rslt;
-    uint8_t nvm_status;
-    uint8_t nvmdata[2];
+    int8_t rslt = BMP5_OK;
+    uint8_t nvm_status = 0;
+    uint8_t nvmdata[2] = { 0 };
 
     if (nvm_data != NULL)
     {
         rslt = get_nvm_status(&nvm_status, dev);
 
-        /* Check if NVM ready status = 1, NVM error status = 0 and NVM command error status = 0 */
-        if ((nvm_status & BMP5_INT_NVM_RDY) && (!(nvm_status & BMP5_INT_NVM_ERR)) &&
-            (!(nvm_status & BMP5_INT_NVM_CMD_ERR)))
+        if (rslt == BMP5_OK)
         {
-            /* Read the NVM data from the register address */
-            rslt = bmp5_get_regs(BMP5_REG_NVM_DATA_LSB, nvmdata, 2, dev);
+            /* Check if NVM ready status = 1, NVM error status = 0 and NVM command error status = 0 */
+            if ((nvm_status & BMP5_INT_NVM_RDY) && (!(nvm_status & BMP5_INT_NVM_ERR)) &&
+                (!(nvm_status & BMP5_INT_NVM_CMD_ERR)))
+            {
+                /* Read the NVM data from the register address */
+                rslt = bmp5_get_regs(BMP5_REG_NVM_DATA_LSB, nvmdata, 2, dev);
 
-            (*nvm_data) = (uint16_t)((nvmdata[1] << 8) | nvmdata[0]);
-        }
-        else
-        {
-            rslt = BMP5_E_NVM_NOT_READY;
+                (*nvm_data) = (uint16_t)((nvmdata[1] << 8) | nvmdata[0]);
+            }
+            else
+            {
+                rslt = BMP5_E_NVM_NOT_READY;
+            }
         }
     }
     else
@@ -2114,7 +2233,7 @@ static int8_t get_nvm_data(uint16_t *nvm_data, struct bmp5_dev *dev)
  */
 static int8_t get_nvm_status(uint8_t *nvm_status, struct bmp5_dev *dev)
 {
-    int8_t rslt;
+    int8_t rslt = BMP5_OK;
 
     if (nvm_status != NULL)
     {
