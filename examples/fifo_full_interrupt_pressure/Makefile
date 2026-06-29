@@ -1,6 +1,6 @@
 COINES_INSTALL_PATH ?= ../../../..
 
-EXAMPLE_FILE ?= fifo_full_interrupt.c
+EXAMPLE_FILE ?= fifo_full_interrupt_pressure.c
 
 API_LOCATION ?= ../..
 

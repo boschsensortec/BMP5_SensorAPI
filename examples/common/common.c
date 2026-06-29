@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2022 Bosch Sensortec GmbH. All rights reserved.
+ * Copyright (c) 2026 Bosch Sensortec GmbH. All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -10,6 +10,7 @@
 
 #include "coines.h"
 #include "bmp5_defs.h"
+#include "bmp5_selftest.h"
 
 /******************************************************************************/
 /*!                         Macro definitions                                 */
@@ -108,9 +109,9 @@ void bmp5_error_codes_print_result(const char api_name[], int8_t rslt)
         {
             printf("Error [%d] : Invalid chip id\r\n", rslt);
         }
-        else if (rslt == BMP5_E_POWER_UP)
+        else if (rslt == BMP5_E_NVM_NOT_READY)
         {
-            printf("Error [%d] : Power up error\r\n", rslt);
+            printf("Error [%d] : NVM not ready\r\n", rslt);
         }
         else if (rslt == BMP5_E_POR_SOFTRESET)
         {
@@ -119,6 +120,38 @@ void bmp5_error_codes_print_result(const char api_name[], int8_t rslt)
         else if (rslt == BMP5_E_INVALID_POWERMODE)
         {
             printf("Error [%d] : Invalid powermode\r\n", rslt);
+        }
+        else if (rslt == BMP5_E_INVALID_THRESHOLD)
+        {
+            printf("Error [%d] : Invalid threshold\r\n", rslt);
+        }
+        else if (rslt == BMP5_COMMUNICATION_ERROR_OR_WRONG_DEVICE)
+        {
+            printf("Error [%d] : Communication error or wrong device\r\n", rslt);
+        }
+        else if (rslt == BMP5_TRIMMING_DATA_OUT_OF_BOUND)
+        {
+            printf("Error [%d] : Trimming data out of bound\r\n", rslt);
+        }
+        else if (rslt == BMP5_TEMPERATURE_BOUND_WIRE_FAILURE_OR_MEMS_DEFECT)
+        {
+            printf("Error [%d] : Temperature bound wire failure or MEMS defect\r\n", rslt);
+        }
+        else if (rslt == BMP5_PRESSURE_BOUND_WIRE_FAILURE_OR_MEMS_DEFECT)
+        {
+            printf("Error [%d] : Pressure bound wire failure or MEMS defect\r\n", rslt);
+        }
+        else if (rslt == BMP5_IMPLAUSIBLE_TEMPERATURE)
+        {
+            printf("Error [%d] : Implausible temperature\r\n", rslt);
+        }
+        else if (rslt == BMP5_IMPLAUSIBLE_PRESSURE)
+        {
+            printf("Error [%d] : Implausible pressure\r\n", rslt);
+        }
+        else if (rslt == BMP5_E_SELFTEST_TIMEOUT)
+        {
+            printf("Error [%d] : Self-test timeout\r\n", rslt);
         }
         else
         {
@@ -166,7 +199,7 @@ int8_t bmp5_interface_init(struct bmp5_dev *bmp5_dev, uint8_t intf)
         /* Bus configuration : I2C */
         if (intf == BMP5_I2C_INTF)
         {
-            printf("I2C Interface\n");
+            printf("Interface : I2C\n");
 
             dev_addr = BMP5_I2C_ADDR_PRIM;
             bmp5_dev->read = bmp5_i2c_read;
@@ -182,7 +215,7 @@ int8_t bmp5_interface_init(struct bmp5_dev *bmp5_dev, uint8_t intf)
         /* Bus configuration : SPI */
         else if (intf == BMP5_SPI_INTF)
         {
-            printf("SPI Interface\n");
+            printf("Interface : SPI \n");
 
             dev_addr = COINES_SHUTTLE_PIN_7;
             bmp5_dev->read = bmp5_spi_read;

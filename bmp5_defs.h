@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
+* Copyright (c) 2026 Bosch Sensortec GmbH. All rights reserved.
 *
 * BSD-3-Clause
 *
@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5_defs.h
-* @date       2022-08-11
-* @version    v1.1.1
+* @date       2026-05-29
+* @version    v1.5.0
 *
 */
 
@@ -114,6 +114,15 @@
 /******************************************************************************/
 /*! @name        Compiler switch macros Definitions                */
 /******************************************************************************/
+
+/* Note: In case neither BMP5_USE_FIXED_POINT nor BMP5_USE_FLOATING_POINT was defined by the build system,
+ * floating-point arithmetic (float) will be used by default.
+ *
+ * WARNING: On targets without a hardware FPU (e.g. Cortex-M0, M0+, M3) every floating-point
+ * operation is emulated in software (soft-float), adding 20-100 cycles per arithmetic
+ * instruction.  If your target lacks a hardware FPU, define BMP5_USE_FIXED_POINT in your
+ * build system (compiler flag: -DBMP5_USE_FIXED_POINT) to avoid this overhead.
+ */
 #ifndef BMP5_USE_FIXED_POINT /*< Check if floating point (using BMP5_USE_FIXED_POINT) is enabled */
 #ifndef BMP5_USE_FLOATING_POINT /*< If fixed point is not enabled then enable BMP5_USE_FLOATING_POINT */
 #define BMP5_USE_FLOATING_POINT
@@ -163,10 +172,6 @@
 #define FALSE                                     UINT8_C(0x00)
 #endif
 
-#ifndef NULL
-#define NULL                                      UINT8_C(0x00)
-#endif
-
 #ifndef ABS
 #define ABS(a)                                    ((a) > 0 ? (a) : -(a))    /*!< Absolute value */
 #endif
@@ -177,22 +182,22 @@
 
 /*! @name BIT SLICE GET AND SET FUNCTIONS */
 #define BMP5_GET_BITSLICE(regvar, bitname) \
-    ((regvar & bitname##_MSK) >> bitname##_POS)
+    (((regvar) & bitname##_MSK) >> bitname##_POS)
 
 #define BMP5_SET_BITSLICE(regvar, bitname, val) \
-    ((regvar & ~bitname##_MSK) | \
-     ((val << bitname##_POS) & bitname##_MSK))
+    (((regvar) & ~bitname##_MSK) | \
+     (((val) << bitname##_POS) & bitname##_MSK))
 
-#define BMP5_GET_LSB(var)                         (uint8_t)(var & BMP5_SET_LOW_BYTE)
-#define BMP5_GET_MSB(var)                         (uint8_t)((var & BMP5_SET_HIGH_BYTE) >> 8)
+#define BMP5_GET_LSB(var)                         (uint8_t)((var) & BMP5_SET_LOW_BYTE)
+#define BMP5_GET_MSB(var)                         (uint8_t)(((var) & BMP5_SET_HIGH_BYTE) >> 8)
 
-#define BMP5_SET_BIT_VAL_0(reg_data, bitname)     (reg_data & ~(bitname##_MSK))
+#define BMP5_SET_BIT_VAL_0(reg_data, bitname)     ((reg_data) & ~(bitname##_MSK))
 
 #define BMP5_SET_BITS_POS_0(reg_data, bitname, data) \
-    ((reg_data & ~(bitname##_MSK)) | \
-     (data & bitname##_MSK))
+    (((reg_data) & ~(bitname##_MSK)) | \
+     ((data) & (bitname##_MSK)))
 
-#define BMP5_GET_BITS_POS_0(reg_data, bitname)    (reg_data & (bitname##_MSK))
+#define BMP5_GET_BITS_POS_0(reg_data, bitname)    ((reg_data) & (bitname##_MSK))
 
 /*! @name Chip id of BMP5 */
 #define BMP5_CHIP_ID_PRIM                         UINT8_C(0x50)
@@ -206,13 +211,12 @@
 #define BMP5_E_COM_FAIL                           INT8_C(-2)
 #define BMP5_E_DEV_NOT_FOUND                      INT8_C(-3)
 #define BMP5_E_INVALID_CHIP_ID                    INT8_C(-4)
-#define BMP5_E_POWER_UP                           INT8_C(-5)
+#define BMP5_E_NVM_NOT_READY                      INT8_C(-5)
 #define BMP5_E_POR_SOFTRESET                      INT8_C(-6)
 #define BMP5_E_INVALID_POWERMODE                  INT8_C(-7)
 #define BMP5_E_INVALID_THRESHOLD                  INT8_C(-8)
 #define BMP5_E_FIFO_FRAME_EMPTY                   INT8_C(-9)
 #define BMP5_E_NVM_INVALID_ADDR                   INT8_C(-10)
-#define BMP5_E_NVM_NOT_READY                      INT8_C(-11)
 
 #define BMP5_ENABLE                               UINT8_C(0x01)
 #define BMP5_DISABLE                              UINT8_C(0x00)
@@ -406,6 +410,7 @@
 
 /*! @name IIR configurations */
 #define BMP5_SET_IIR_TEMP_MSK                     UINT8_C(0x07)
+#define BMP5_SET_IIR_TEMP_POS                     UINT8_C(0)
 
 #define BMP5_SET_IIR_PRESS_MSK                    UINT8_C(0x38)
 #define BMP5_SET_IIR_PRESS_POS                    UINT8_C(3)
@@ -553,8 +558,8 @@ enum bmp5_powermode {
     BMP5_POWERMODE_NORMAL,
     /*! Forced powermode */
     BMP5_POWERMODE_FORCED,
-    /*! Continous powermode */
-    BMP5_POWERMODE_CONTINOUS,
+    /*! Continuous powermode */
+    BMP5_POWERMODE_CONTINUOUS,
     /*! Deep standby powermode */
     BMP5_POWERMODE_DEEP_STANDBY
 };
@@ -698,26 +703,26 @@ struct bmp5_iir_config
     /*! Temperature IIR
      * Assignable macros :
      * - BMP5_IIR_FILTER_BYPASS
-     * - BMP5_IIR_FILTER_0_20980
-     * - BMP5_IIR_FILTER_0_08045
-     * - BMP5_IIR_FILTER_0_03695
-     * - BMP5_IIR_FILTER_0_01785
-     * - BMP5_IIR_FILTER_0_00880
-     * - BMP5_IIR_FILTER_0_00435
-     * - BMP5_IIR_FILTER_0_00220
+     * - BMP5_IIR_FILTER_COEFF_1
+     * - BMP5_IIR_FILTER_COEFF_3
+     * - BMP5_IIR_FILTER_COEFF_7
+     * - BMP5_IIR_FILTER_COEFF_15
+     * - BMP5_IIR_FILTER_COEFF_31
+     * - BMP5_IIR_FILTER_COEFF_63
+     * - BMP5_IIR_FILTER_COEFF_127
      */
     uint8_t set_iir_t;
 
     /*! Pressure IIR
      * Assignable macros :
      * - BMP5_IIR_FILTER_BYPASS
-     * - BMP5_IIR_FILTER_0_20980
-     * - BMP5_IIR_FILTER_0_08045
-     * - BMP5_IIR_FILTER_0_03695
-     * - BMP5_IIR_FILTER_0_01785
-     * - BMP5_IIR_FILTER_0_00880
-     * - BMP5_IIR_FILTER_0_00435
-     * - BMP5_IIR_FILTER_0_00220
+     * - BMP5_IIR_FILTER_COEFF_1
+     * - BMP5_IIR_FILTER_COEFF_3
+     * - BMP5_IIR_FILTER_COEFF_7
+     * - BMP5_IIR_FILTER_COEFF_15
+     * - BMP5_IIR_FILTER_COEFF_31
+     * - BMP5_IIR_FILTER_COEFF_63
+     * - BMP5_IIR_FILTER_COEFF_127
      */
     uint8_t set_iir_p;
 

@@ -1,5 +1,5 @@
 /**
-* Copyright (c) 2022 Bosch Sensortec GmbH. All rights reserved.
+* Copyright (c) 2026 Bosch Sensortec GmbH. All rights reserved.
 *
 * BSD-3-Clause
 *
@@ -31,8 +31,8 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *
 * @file       bmp5.h
-* @date       2022-08-11
-* @version    v1.1.1
+* @date       2026-05-29
+* @version    v1.5.0
 *
 */
 
@@ -72,6 +72,7 @@ extern "C" {
  * \code
  * int8_t bmp5_init(struct bmp5_dev *dev);
  * \endcode
+ * @brief Initialize the BMP5 sensor.
  * @details This API is the entry point. Call this API before using all other APIs.
  * This API reads the chip-id of the sensor and sets the resolution, feature
  * length and the type of variant.
@@ -97,6 +98,7 @@ int8_t bmp5_init(struct bmp5_dev *dev);
  * \code
  * int8_t bmp5_get_regs(uint8_t reg_addr, uint8_t *data, uint32_t len, struct bmp5_dev *dev);
  * \endcode
+ * @brief Read data from the specified register address.
  * @details This API reads the data from the given register address of sensor.
  *
  * @param[in] reg_addr  : Register address from where the data to be read.
@@ -116,6 +118,7 @@ int8_t bmp5_get_regs(uint8_t reg_addr, uint8_t *data, uint32_t len, struct bmp5_
  * \code
  * int8_t bmp5_set_regs(uint8_t reg_addr, const uint8_t *data, uint32_t len, struct bmp5_dev *dev);
  * \endcode
+ * @brief Write data to the specified register address.
  * @details This API writes the given data to the register address of sensor.
  *
  * @param[in] reg_addr  : Register address where the data is to be written.
@@ -142,6 +145,7 @@ int8_t bmp5_set_regs(uint8_t reg_addr, const uint8_t *data, uint32_t len, struct
  * \code
  * int8_t bmp5_soft_reset(struct bmp5_dev *dev);
  * \endcode
+ * @brief Perform a soft reset of the sensor.
  * @details This API is used to soft-reset the sensor where all the registers are reset to their default values.
  *
  * @note If this register is set using I2C, an ACK will NOT be transmitted to
@@ -167,6 +171,7 @@ int8_t bmp5_soft_reset(struct bmp5_dev *dev);
  * \code
  * int8_t bmp5_get_interrupt_status(uint8_t *int_status, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get the interrupt status of the sensor.
  * @details This API is used to get the interrupt status (data ready interrupt, fifo full interrupt,
  * fifo threshold interrupt, pressure out of range interrupt and power-on reset/software reset complete interrupt).
  *
@@ -203,6 +208,7 @@ int8_t bmp5_get_interrupt_status(uint8_t *int_status, struct bmp5_dev *dev);
  * \code
  * int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev);
  * \endcode
+ * @brief Set the power mode of the sensor.
  * @details This API sets the power mode of the sensor.
  *
  * @param[in] powermode : Select powermode.
@@ -213,11 +219,11 @@ int8_t bmp5_get_interrupt_status(uint8_t *int_status, struct bmp5_dev *dev);
  *@verbatim
  * powermode        |   Macros
  * -----------------|-------------------
- *     0            | BMP5_POWERMODE_STANBY
+ *     0            | BMP5_POWERMODE_STANDBY
  *     1            | BMP5_POWERMODE_NORMAL
  *     2            | BMP5_POWERMODE_FORCED
- *     3            | BMP5_POWERMODE_CONTINOUS
- *     4            | BMP5_POWERMODE_DEEP_STANBY
+ *     3            | BMP5_POWERMODE_CONTINUOUS
+ *     4            | BMP5_POWERMODE_DEEP_STANDBY
  *@endverbatim
  *
  * @return Result of API execution status.
@@ -232,6 +238,7 @@ int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev);
  * \code
  * int8_t bmp5_get_power_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get the current power mode of the sensor.
  * @details This API gets the power mode of the sensor.
  *
  * @param[out] powermode : To store the power mode.
@@ -242,11 +249,11 @@ int8_t bmp5_set_power_mode(enum bmp5_powermode powermode, struct bmp5_dev *dev);
  *@verbatim
  * powermode        |   Macros
  * -----------------|-------------------
- *     0            | BMP5_POWERMODE_STANBY
+ *     0            | BMP5_POWERMODE_STANDBY
  *     1            | BMP5_POWERMODE_NORMAL
  *     2            | BMP5_POWERMODE_FORCED
- *     3            | BMP5_POWERMODE_CONTINOUS
- *     4            | BMP5_POWERMODE_DEEP_STANBY
+ *     3            | BMP5_POWERMODE_CONTINUOUS
+ *     4            | BMP5_POWERMODE_DEEP_STANDBY
  *@endverbatim
  *
  * @return Result of API execution status.
@@ -268,6 +275,7 @@ int8_t bmp5_get_power_mode(enum bmp5_powermode *powermode, struct bmp5_dev *dev)
  * int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
  *                             const struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev);
  * \endcode
+ * @brief Read pressure and temperature sensor data.
  * @details This API reads the temperature(deg C) or both pressure(Pa) and temperature(deg C) data from the
  * sensor and store it in the bmp5_sensor_data structure instance passed by the user.
  *
@@ -299,6 +307,7 @@ int8_t bmp5_get_sensor_data(struct bmp5_sensor_data *sensor_data,
  * \code
  * int8_t bmp5_int_source_select(const struct bmp5_int_source_select *int_source_select, struct bmp5_dev *dev);
  * \endcode
+ * @brief Select and enable interrupt sources.
  * @details This API is used to enable the interrupts(drdy interrupt, fifo full interrupt,
  *   fifo threshold enable and pressure data out of range interrupt).
  *
@@ -321,6 +330,7 @@ int8_t bmp5_int_source_select(const struct bmp5_int_source_select *int_source_se
  *                                 enum bmp5_intr_en_dis int_en,
  *                                 struct bmp5_dev *dev);
  * \endcode
+ * @brief Configure sensor interrupt behavior and pin settings.
  * @details This API is used to configure the interrupt settings.
  *
  * @param[in] int_mode          : Sets either latched or pulsed.
@@ -351,6 +361,7 @@ int8_t bmp5_configure_interrupt(enum bmp5_intr_mode int_mode,
  * \code
  * int8_t bmp5_get_osr_odr_press_config(struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get the OSR, ODR, and pressure-enable configuration.
  * @details This API gets the configuration for oversampling of temperature, oversampling of
  * pressure and ODR configuration for normal mode along with pressure enable.
  *
@@ -369,6 +380,7 @@ int8_t bmp5_get_osr_odr_press_config(struct bmp5_osr_odr_press_config *osr_odr_p
  * \code
  * int8_t bmp5_set_osr_odr_press_config(const struct bmp5_osr_odr_press_config *osr_odr_press_cfg, struct bmp5_dev *dev);
  * \endcode
+ * @brief Set the OSR, ODR, and pressure-enable configuration.
  * @details This API sets the configuration for oversampling of temperature, oversampling of
  * pressure and ODR configuration along with pressure enable.
  *
@@ -390,6 +402,7 @@ int8_t bmp5_set_osr_odr_press_config(const struct bmp5_osr_odr_press_config *osr
  * \code
  * int8_t bmp5_get_iir_config(struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get the IIR configuration for temperature and pressure.
  * @details This API gets the configuration for IIR of temperature and pressure.
  *
  * @param[out] iir_cfg  : Structure instance of bmp5_iir_config.
@@ -407,6 +420,7 @@ int8_t bmp5_get_iir_config(struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev
  * \code
  * int8_t bmp5_set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_dev *dev);
  * \endcode
+ * @brief Set the IIR configuration for temperature and pressure.
  * @details This API sets the configuration for IIR of temperature and pressure.
  *
  * @note
@@ -431,6 +445,7 @@ int8_t bmp5_set_iir_config(const struct bmp5_iir_config *iir_cfg, struct bmp5_de
  * \code
  * int8_t bmp5_get_osr_odr_eff(struct bmp5_osr_odr_eff *osr_odr_eff, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get effective OSR values and ODR validity status.
  * @details This API gets the configuration for effective OSR of temperature,
  * effective OSR of pressure and ODR valid status.
  *
@@ -455,6 +470,7 @@ int8_t bmp5_get_osr_odr_eff(struct bmp5_osr_odr_eff *osr_odr_eff, struct bmp5_de
  * \code
  * int8_t bmp5_get_fifo_configuration(struct bmp5_fifo *fifo, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get FIFO configuration from the sensor.
  * @details This API used to get the configurations of fifo from the sensor.
  *
  * @param[out] fifo : Structure instance of bmp5_fifo.
@@ -472,6 +488,7 @@ int8_t bmp5_get_fifo_configuration(struct bmp5_fifo *fifo, struct bmp5_dev *dev)
  * \code
  * int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev *dev);
  * \endcode
+ * @brief Set FIFO configuration in the sensor.
  * @details This API used to set the configurations of fifo in the sensor.
  *
  * @param[in] fifo : Structure instance of bmp5_fifo.
@@ -492,6 +509,7 @@ int8_t bmp5_set_fifo_configuration(const struct bmp5_fifo *fifo, struct bmp5_dev
  * \code
  * int8_t bmp5_get_fifo_len(uint8_t *fifo_len, struct bmp5_fifo *fifo, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get FIFO length from the sensor.
  * @details This API is used to get the length of fifo from the sensor.
  *
  * @param[out] fifo_len : Variable to store fifo length.
@@ -510,6 +528,7 @@ int8_t bmp5_get_fifo_len(uint16_t *fifo_len, struct bmp5_fifo *fifo, struct bmp5
  * \code
  * int8_t bmp5_get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev);
  * \endcode
+ * @brief Read FIFO data from the sensor.
  * @details This API is used to get the fifo data from the sensor.
  *
  * @param[out] fifo       : Structure instance of bmp5_fifo.
@@ -527,12 +546,12 @@ int8_t bmp5_get_fifo_data(struct bmp5_fifo *fifo, struct bmp5_dev *dev);
  * \code
  * int8_t bmp5_extract_fifo_data(const struct bmp5_fifo *fifo, struct bmp5_sensor_data *sensor_data);
  * \endcode
+ * @brief Extract pressure and temperature data from FIFO bytes.
  * @details This API extract the temperature and/or pressure data from the fifo data which is
  * already read from the fifo.
  *
  * @param[in] fifo         : Structure instance of bmp5_fifo.
  * @param[out] sensor_data : Structure instance of bmp5_sensor_data.
- * @param[in] dev          : Structure instance of bmp5_dev.
  *
  * @return Result of API execution status.
  * @return 0 -> Success
@@ -552,6 +571,7 @@ int8_t bmp5_extract_fifo_data(const struct bmp5_fifo *fifo, struct bmp5_sensor_d
  * \code
  * int8_t bmp5_get_oor_configuration(struct bmp5_oor_press_configuration *oor_press_config, struct bmp5_dev *dev);
  * \endcode
+ * @brief Get out-of-range pressure configuration.
  * @details This API gets the configuration for out-of-range pressure threshold, range
  *  count limit and IIR.
  *
@@ -570,6 +590,7 @@ int8_t bmp5_get_oor_configuration(struct bmp5_oor_press_configuration *oor_press
  * \code
  * int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor_press_config, struct bmp5_dev *dev);
  * \endcode
+ * @brief Set out-of-range pressure configuration.
  * @details This API sets the configuration for out-of-range pressure threshold, range
  *  count limit and IIR.
  *
@@ -594,6 +615,7 @@ int8_t bmp5_set_oor_configuration(const struct bmp5_oor_press_configuration *oor
  * \code
  * int8_t bmp5_nvm_read(uint8_t nvm_addr, uint16_t *nvm_data, struct bmp5_dev *dev);
  * \endcode
+ * @brief Read data from NVM.
  * @details This API is used to perform NVM read.
  *
  * @param[in] nvm_addr  : Variable that holds the nvm address.
@@ -612,6 +634,7 @@ int8_t bmp5_nvm_read(uint8_t nvm_addr, uint16_t *nvm_data, struct bmp5_dev *dev)
  * \code
  * int8_t bmp5_nvm_write(uint8_t nvm_addr, const uint16_t *nvm_data, struct bmp5_dev *dev);
  * \endcode
+ * @brief Write data to NVM.
  * @details This API used to perform NVM write.
  *
  * @param[in] nvm_addr  : Variable that holds the nvm address.
